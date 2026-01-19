@@ -1,5 +1,6 @@
 package dev.jdtech.jellyfin.presentation.film
 
+import android.app.Activity
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.clickable
@@ -20,6 +21,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -58,7 +60,9 @@ import dev.jdtech.jellyfin.presentation.film.components.ItemTopBar
 import dev.jdtech.jellyfin.presentation.film.components.OverviewText
 import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
+import dev.jdtech.jellyfin.presentation.utils.LocalOfflineMode
 import dev.jdtech.jellyfin.presentation.utils.rememberSafePadding
+import dev.jdtech.jellyfin.utils.restart
 import dev.jdtech.jellyfin.utils.getShowDateString
 import java.util.UUID
 import org.jellyfin.sdk.model.api.BaseItemKind
@@ -74,6 +78,7 @@ fun ShowScreen(
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
+    val isOfflineMode = LocalOfflineMode.current
 
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -81,6 +86,11 @@ fun ShowScreen(
 
     ShowScreenLayout(
         state = state,
+        isOfflineMode = isOfflineMode,
+        onEnableOfflineMode = {
+            viewModel.enableOfflineMode()
+            (context as? Activity)?.restart()
+        },
         onAction = { action ->
             when (action) {
                 is ShowAction.Play -> {
@@ -108,7 +118,12 @@ fun ShowScreen(
 }
 
 @Composable
-private fun ShowScreenLayout(state: ShowState, onAction: (ShowAction) -> Unit) {
+private fun ShowScreenLayout(
+    state: ShowState,
+    isOfflineMode: Boolean,
+    onEnableOfflineMode: () -> Unit,
+    onAction: (ShowAction) -> Unit,
+) {
     val safePadding = rememberSafePadding()
 
     val paddingStart = safePadding.start + MaterialTheme.spacings.default
@@ -286,7 +301,29 @@ private fun ShowScreenLayout(state: ShowState, onAction: (ShowAction) -> Unit) {
                 }
                 Spacer(Modifier.height(paddingBottom))
             }
-        } ?: run { CircularProgressIndicator(modifier = Modifier.align(Alignment.Center)) }
+        } ?: run {
+            Column(
+                modifier =
+                    Modifier.align(Alignment.Center)
+                        .padding(horizontal = MaterialTheme.spacings.default)
+                        .widthIn(max = 360.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacings.small),
+            ) {
+                CircularProgressIndicator()
+                if (!isOfflineMode) {
+                    if (state.error != null) {
+                        Text(
+                            text = stringResource(CoreR.string.no_server_connection),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                    Button(onClick = onEnableOfflineMode) {
+                        Text(text = stringResource(CoreR.string.offline_mode))
+                    }
+                }
+            }
+        }
 
         ItemTopBar(
             hasBackButton = true,
@@ -300,5 +337,12 @@ private fun ShowScreenLayout(state: ShowState, onAction: (ShowAction) -> Unit) {
 @PreviewScreenSizes
 @Composable
 private fun EpisodeScreenLayoutPreview() {
-    FindroidTheme { ShowScreenLayout(state = ShowState(show = dummyShow), onAction = {}) }
+    FindroidTheme {
+        ShowScreenLayout(
+            state = ShowState(show = dummyShow),
+            isOfflineMode = false,
+            onEnableOfflineMode = {},
+            onAction = {},
+        )
+    }
 }
